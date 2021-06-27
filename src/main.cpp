@@ -10,7 +10,7 @@
 
 #include "config.h"
 
-#define DHTPIN 17
+#define DHTPIN (17)
 #define DHTTYPE DHT22
 #define BUFFERSIZE (64)
 
@@ -18,44 +18,54 @@ DHT_Unified dht(DHTPIN, DHTTYPE);
 constexpr uint32_t delayMS = 10000;
 
 WiFiClient espClient;
-PubSubClient client(espClient); //lib required for mqtt
+PubSubClient client(espClient);  // lib required for mqtt
 
 constexpr uint16_t mqttPort = 1883;
-constexpr uint16_t otaPort = 3232;
+constexpr uint16_t otaPort = 3232;  // Port defaults to 3232
 
-const char* mqttServer = "io.adafruit.com"; //mqtt server
+const char* mqttServer = "io.adafruit.com";  // mqtt server
 const char* hostName = "gartenesp32";
 
-char buffer[BUFFERSIZE];
+const int AirValue = 3620;    // you need to replace this value with Value_1
+const int WaterValue = 1680;  // you need to replace this value with Value_2
+const int MoisturePin = 35;
+int soilMoistureValue = 0;
+int soilmoisturepercent = 0;
+
+unsigned long myTime = 0;
 
 char topicHumidity[BUFFERSIZE];
-
+char bufferHumidity[BUFFERSIZE];
 char topicWaterSoil[BUFFERSIZE];
-
+char bufferWaterSoil[BUFFERSIZE];
 char topicTemp[BUFFERSIZE];
-
+char bufferTemp[BUFFERSIZE];
 char topicLog[BUFFERSIZE];
-
 
 void connectmqtt();
 void reconnect();
 void callback(char* topic, byte* payload, unsigned int length);
-static void cleanBuffer();
-unsigned long myTime = 0;
+void readMoisture();
 void prepareStrings();
 
 void prepareStrings() {
-  snprintf(topicHumidity, BUFFERSIZE, "%s%s", IO_USERNAME, "/f/luftfeuchtigkeit");
-  snprintf(topicWaterSoil, BUFFERSIZE, "%s%s", IO_USERNAME, "/f/bodenfeuchtigkeit");
-  snprintf(topicTemp, BUFFERSIZE, "%s%s", IO_USERNAME, "/f/temperatur");
-  snprintf(topicLog, BUFFERSIZE, "%s%s", IO_USERNAME, "/f/log");
+  snprintf(topicHumidity, BUFFERSIZE, "%s%s", IO_USERNAME,
+           "/f/don-pavlov.humidity");
+  snprintf(topicWaterSoil, BUFFERSIZE, "%s%s", IO_USERNAME,
+           "/f/don-pavlov.soilmoisture");
+  snprintf(topicTemp, BUFFERSIZE, "%s%s", IO_USERNAME,
+           "/f/don-pavlov.temperature");
+  snprintf(topicLog, BUFFERSIZE, "%s%s", IO_USERNAME, "/f/don-pavlov.log");
 }
 
 void setup() {
   prepareStrings();
   Serial.begin(115200);
   Serial.println("Booting");
-  cleanBuffer();
+  std::fill(bufferTemp, bufferTemp + BUFFERSIZE, 0);
+  std::fill(bufferHumidity, bufferHumidity + BUFFERSIZE, 0);
+  std::fill(bufferWaterSoil, bufferWaterSoil + BUFFERSIZE, 0);
+
   WiFi.mode(WIFI_STA);
 
   WiFi.begin(ssid, password);
@@ -65,7 +75,6 @@ void setup() {
     ESP.restart();
   }
 
-  // Port defaults to 3232
   ArduinoOTA.setPort(otaPort);
 
   ArduinoOTA.setHostname(hostName);
@@ -155,63 +164,55 @@ void setup() {
   Serial.println(F("%"));
   Serial.println(F("------------------------------------"));
   // Set delay between sensor readings based on sensor details.
-  // delayMS = sensor.min_delay / 1000;
+
   client.setServer(mqttServer, mqttPort);
   client.setCallback(callback);
-
-
 }
-
-static void cleanBuffer() {
-  std::fill(buffer, buffer+BUFFERSIZE, 0);
-}
-
 
 void loop() {
   ArduinoOTA.handle();
 
-  if(millis() - myTime > delayMS) {
+  if (millis() - myTime > delayMS) {
     myTime = millis();
-  // Get temperature event and print its value.
-  sensors_event_t event;
-  dht.temperature().getEvent(&event);
-  if (isnan(event.temperature)) {
-    Serial.println(F("Error reading temperature!"));
-  } else {
-    snprintf(buffer, BUFFERSIZE, "Temperature: %.2f°C", event.temperature);
-    Serial.println(buffer);
-
-
-    snprintf(buffer, BUFFERSIZE, "%.2f", event.temperature);
-    if(client.connected()) {
-      client.publish(topicTemp, buffer);
+    // Get temperature event and print its value.
+    sensors_event_t event;
+    dht.temperature().getEvent(&event);
+    if (isnan(event.temperature)) {
+      Serial.println(F("Error reading temperature!"));
+    } else {
+      snprintf(bufferTemp, BUFFERSIZE, "Temperature: %.2f°C",
+               event.temperature);
+      Serial.println(bufferTemp);
+      std::fill(bufferTemp, bufferTemp + BUFFERSIZE, 0);
+      snprintf(bufferTemp, BUFFERSIZE, "%.2f", event.temperature);
+      if (client.connected()) {
+        client.publish(topicTemp, bufferTemp);
+      }
+      std::fill(bufferTemp, bufferTemp + BUFFERSIZE, 0);
     }
-    cleanBuffer();
-  }
-  // Get humidity event and print its value.
-  dht.humidity().getEvent(&event);
-  if (isnan(event.relative_humidity)) {
-    Serial.println(F("Error reading humidity!"));
-  } else {
-    snprintf(buffer, BUFFERSIZE, "Humidity: %.2f%%", event.relative_humidity);
-    Serial.println(buffer);
-    cleanBuffer();
-    snprintf(buffer, BUFFERSIZE,"%.2f", event.relative_humidity);
-    if(client.connected()) {
-      client.publish(topicHumidity, buffer);
-    }
-    cleanBuffer();
-
+    // Get humidity event and print its value.
+    dht.humidity().getEvent(&event);
+    if (isnan(event.relative_humidity)) {
+      Serial.println(F("Error reading humidity!"));
+    } else {
+      snprintf(bufferHumidity, BUFFERSIZE, "Humidity: %.2f%%",
+               event.relative_humidity);
+      Serial.println(bufferHumidity);
+      std::fill(bufferHumidity, bufferHumidity + BUFFERSIZE, 0);
+      snprintf(bufferHumidity, BUFFERSIZE, "%.2f", event.relative_humidity);
+      if (client.connected()) {
+        client.publish(topicHumidity, bufferHumidity);
+      }
+      std::fill(bufferHumidity, bufferHumidity + BUFFERSIZE, 0);
     }
 
-  // client.publish("esp32/temperature", tempString);
-  // client.publish("esp32/humidity", humString);
-  if (!client.connected())
-  {
-    reconnect();
-  }
+    readMoisture();
 
-  client.loop();
+    if (!client.connected()) {
+      reconnect();
+    }
+
+    client.loop();
   }
 }
 
@@ -219,18 +220,15 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
-  for (int i = 0; i < length; i++)
-  {
+  for (int i = 0; i < length; i++) {
     Serial.print((char)payload[i]);
   }
-  if ((char)payload[0] == 'O' && (char)payload[1] == 'N') //on
+  if ((char)payload[0] == 'O' && (char)payload[1] == 'N')  // on
   {
-    // digitalWrite(LED, HIGH);
     Serial.println("on");
-  }
-  else if ((char)payload[0] == 'O' && (char)payload[1] == 'F' && (char)payload[2] == 'F') //off
+  } else if ((char)payload[0] == 'O' && (char)payload[1] == 'F' &&
+             (char)payload[2] == 'F')  // off
   {
-    // digitalWrite(LED, LOW);
     Serial.println(" off");
   }
   Serial.println();
@@ -242,7 +240,7 @@ void reconnect() {
     if (client.connect(hostName, IO_USERNAME, IO_KEY)) {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      client.publish(topicLog, "Nodemcu connected to MQTT");
+      client.publish(topicLog, "TempHumidMoist reconnected logging");
       // ... and resubscribe
       // client.subscribe("inTopic");
 
@@ -256,20 +254,31 @@ void reconnect() {
   }
 }
 
-void connectmqtt()
-{
-  client.connect(hostName, IO_USERNAME, IO_KEY);  // ESP will connect to mqtt broker with clientID
+void connectmqtt() {
+  client.connect(hostName, IO_USERNAME,
+                 IO_KEY);  // ESP will connect to mqtt broker with clientID
   {
     Serial.println("Connected to MQTT");
     // Once connected, publish an announcement...
 
     // ... and resubscribe
     // client.subscribe("inTopic"); //topic=Demo
-    client.publish(topicLog, "Connected to MQTT");
+    client.publish(topicLog, "TempHumidMoist started logging");
 
-    if (!client.connected())
-    {
+    if (!client.connected()) {
       reconnect();
     }
   }
+}
+
+void readMoisture() {
+  soilMoistureValue = analogRead(MoisturePin);
+  Serial.println(soilMoistureValue);
+  soilmoisturepercent = map(soilMoistureValue, AirValue, WaterValue, 0, 100);
+
+  snprintf(bufferWaterSoil, BUFFERSIZE, "%d", soilMoistureValue);
+  if (client.connected()) {
+    client.publish(topicWaterSoil, bufferWaterSoil);
+  }
+  std::fill(bufferWaterSoil, bufferWaterSoil + BUFFERSIZE, 0);
 }
