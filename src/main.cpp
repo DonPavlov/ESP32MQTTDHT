@@ -26,8 +26,8 @@ constexpr uint16_t otaPort = 3232;  // Port defaults to 3232
 const char* mqttServer = "io.adafruit.com";  // mqtt server
 const char* hostName = "gartenesp32";
 
-const int AirValue = 3620;    // you need to replace this value with Value_1
-const int WaterValue = 1680;  // you need to replace this value with Value_2
+const int AirValue = 3520;    // you need to replace this value with Value_1
+const int WaterValue = 1280;  // you need to replace this value with Value_2
 const int MoisturePin = 35;
 int soilMoistureValue = 0;
 int soilmoisturepercent = 0;
@@ -35,12 +35,14 @@ int soilmoisturepercent = 0;
 unsigned long myTime = 0;
 
 char topicHumidity[BUFFERSIZE];
-char bufferHumidity[BUFFERSIZE];
 char topicWaterSoil[BUFFERSIZE];
-char bufferWaterSoil[BUFFERSIZE];
 char topicTemp[BUFFERSIZE];
-char bufferTemp[BUFFERSIZE];
 char topicLog[BUFFERSIZE];
+
+char bufferHumidity[BUFFERSIZE];
+char bufferWaterSoil[BUFFERSIZE];
+char bufferTemp[BUFFERSIZE];
+char bufferLog[BUFFERSIZE];
 
 void connectmqtt();
 void reconnect();
@@ -65,6 +67,7 @@ void setup() {
   std::fill(bufferTemp, bufferTemp + BUFFERSIZE, 0);
   std::fill(bufferHumidity, bufferHumidity + BUFFERSIZE, 0);
   std::fill(bufferWaterSoil, bufferWaterSoil + BUFFERSIZE, 0);
+  std::fill(bufferLog, bufferLog + BUFFERSIZE, 0);
 
   WiFi.mode(WIFI_STA);
 
@@ -276,9 +279,12 @@ void readMoisture() {
   Serial.println(soilMoistureValue);
   soilmoisturepercent = map(soilMoistureValue, AirValue, WaterValue, 0, 100);
 
-  snprintf(bufferWaterSoil, BUFFERSIZE, "%d", soilMoistureValue);
+  snprintf(bufferWaterSoil, BUFFERSIZE, "%d", soilmoisturepercent);
+  // snprintf(bufferLog, BUFFERSIZE, "SoilRaw: %d", soilMoistureValue);
   if (client.connected()) {
     client.publish(topicWaterSoil, bufferWaterSoil);
+    // client.publish(topicLog, bufferLog);
   }
   std::fill(bufferWaterSoil, bufferWaterSoil + BUFFERSIZE, 0);
+  // std::fill(bufferLog, bufferLog + BUFFERSIZE, 0);
 }
